@@ -2,7 +2,7 @@
 #define BUFIO_H_INCLUDED
 
 #include "common.h"
-#include "coroutine.h"
+#include "coroless.h"
 
 typedef struct BufReader {
 	int sock_fd;

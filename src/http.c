@@ -4,7 +4,7 @@
 #include <time.h>
 #include <sys/socket.h>
 
-#include "coroutine.h"
+#include "coroless.h"
 #include "server.h"
 #include "request.h"
 #include "parser.h"
@@ -38,48 +38,55 @@ const char *fmt_datetime(void)
 	return buffer;
 }
 
-void connection_callback(int s)
+typedef struct HTTPCoroState {
+	BufReader reader;
+	BufWriter writer;
+	Request req;
+	int status;
+} HTTPCoroState;
+
+#define CV variables->
+
+int handle_http_request(CoroContext *state, Connection *conn)
 {
-	MARK_USED(s);
-	CORO_BEGIN(Connection * conn);
+	int c = 0, len = 0;
 
-	int c = 0;
-	int status = STATUS_BAD_REQUEST;
-	Request req = {0};
-	BufReader reader = {.sock_fd = conn->sock_fd};
+	CORO_BEGIN(HTTPCoroState * variables);
+	CORO_ASSERT_DATA_SIZE(HTTPCoroState);
 
-	// Read request header
+	CV reader = (BufReader){.sock_fd = conn->sock_fd, .is_eof = false};
+	CV status = STATUS_BAD_REQUEST;
+
 	while (1) {
-		CORO_AWAIT(c, async_reader_getc(&reader));
+		CORO_AWAIT(c, async_reader_getc(&CV reader));
 		if (c == CORO_IO_EOF)
 			break;
-		if (req.header_len == HEADER_MAX) {
-			status = STATUS_HEADER_LARGE;
+		if (CV req.header_len == HEADER_MAX) {
+			CV status = STATUS_HEADER_LARGE;
 			break;
 		}
-		req.header_data[req.header_len++] = c;
+		CV req.header_data[CV req.header_len++] = c;
 
-		if (c == '\n' && is_request_header_end(&req)) {
+		if (c == '\n' && is_request_header_end(&CV req)) {
 			break;
 		}
 	}
 
-	if (req.header_len == 0) {
+	if (CV req.header_len == 0) {
 		close_connection(conn);
-		CORO_RETURN(0);
+		CORO_RETURN();
 	}
 
-	if (parse_request(&req))
-		status = STATUS_OK;
+	if (parse_request(&CV req))
+		CV status = STATUS_OK;
 
-	if (req.first_line.len > 0)
+	if (CV req.first_line.len > 0)
 		PRINTE(
-			"[%s] %d -- \"%.*s\"\n", fmt_datetime(), status, req.first_line.len,
-			req.first_line.data
+			"[%s] %d -- \"%.*s\"\n", fmt_datetime(), CV status,
+			CV req.first_line.len, CV req.first_line.data
 		);
 
-	int len = 0;
-	const char *response = fmt_response_line(status, &len);
+	const char *response = fmt_response_line(CV status, &len);
 	send(conn->sock_fd, response, len, MSG_NOSIGNAL);
 	send(conn->sock_fd, headers, strlen(headers), MSG_NOSIGNAL);
 	send(conn->sock_fd, message, strlen(message), MSG_NOSIGNAL);
@@ -98,7 +105,7 @@ int main(void)
 		return 2;
 	}
 
-	server_listen(s, connection_callback);
+	server_listen(s, handle_http_request, sizeof(HTTPCoroState));
 
 	return 0;
 }

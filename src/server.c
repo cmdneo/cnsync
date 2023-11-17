@@ -24,7 +24,7 @@
 #include "server.h"
 #include "memory.h"
 #include "bufio.h"
-#include "coroutine.h"
+#include "coroless.h"
 
 /// @brief The TCP Server along with HTTP-request state
 typedef struct Server {
@@ -145,11 +145,13 @@ const char *fmt_ipv4_addr(IPv4Address addr)
 	return addr_str;
 }
 
-int handle_conn_event(Server *s, Connection *conn, uint32_t events)
+int handle_conn_event(
+	Server *s, Connection *conn, uint32_t events, ConnCallback callback
+)
 {
 	if (events & EPOLLIN || events & EPOLLOUT) {
 		int result = 0;
-		CORO_RUN_TASK(result, &conn->coro_ctx);
+		CORO_RUN_TASK(result, callback(&conn->coro_ctx, conn));
 		if (result == CORO_SYS_ERROR)
 			ERRNO_FATAL("coro for connection failed");
 		if (result == CORO_DONE && conn->is_open)
@@ -198,12 +200,11 @@ int handle_server_event(Server *s)
 	Connection *conn = find_free_connection(s->connections, CONNECTIONS_MAX);
 	s->active_cnt++;
 
+	CORO_SETUP_TASK(&conn->coro_ctx);
 	conn->addr = sockaddr_to_ipv4_addr(&conn_addr);
 	conn->sock_fd = conn_fd;
 	conn->is_open = true;
 	conn->estb_time = time(NULL);
-
-	CORO_SETUP_TASK(&conn->coro_ctx, conn);
 
 	// We want to detect read/write availability and if the connection was closed.
 	struct epoll_event event = {
@@ -223,16 +224,17 @@ int handle_server_event(Server *s)
 // 	return e.tv_sec - s.tv_sec + (nano_diff / 1000000000.0);
 // }
 
-int server_listen(Server *s, CoroFunction callback)
+int server_listen(Server *s, ConnCallback callback, size_t data_size)
 {
 	struct epoll_event events[EVENTS_MAX] = {0};
 
-	// Bind all connection coroutines with callback,
-	// We do it only once since doing so takes time
+	char *callback_data = ALLOCATE_SIZED_ARRAY(data_size, CONNECTIONS_MAX);
+	if (callback_data == NULL)
+		ERRNO_FATAL("malloc");
+	// Initialize data buffers for all connection coros
 	for (int i = 0; i < CONNECTIONS_MAX; ++i) {
-		int res = coro_init_n_bind(&s->connections[i].coro_ctx, callback);
-		if (res < 0)
-			ERRNO_FATAL("coro_init_n_bind");
+		s->connections[i].coro_ctx.data = callback_data + i * data_size;
+		s->connections[i].coro_ctx.data_size = data_size;
 	}
 
 	// Register the server with epoll
@@ -261,7 +263,7 @@ int server_listen(Server *s, CoroFunction callback)
 				while (handle_server_event(s) > 0)
 					/* nothing */;
 			} else {
-				handle_conn_event(s, ev.data.ptr, ev.events);
+				handle_conn_event(s, ev.data.ptr, ev.events, callback);
 			}
 		}
 	}
