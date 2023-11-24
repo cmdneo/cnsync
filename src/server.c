@@ -151,7 +151,7 @@ int handle_conn_event(
 {
 	if (events & EPOLLIN || events & EPOLLOUT) {
 		int result = 0;
-		CORO_RUN_TASK(result, callback(&conn->coro_ctx, conn));
+		CORO_RUN(result, callback(&conn->coro_ctx, conn));
 		if (result == CORO_SYS_ERROR)
 			ERRNO_FATAL("coro for connection failed");
 		if (result == CORO_DONE && conn->is_open)
@@ -200,7 +200,7 @@ int handle_server_event(Server *s)
 	Connection *conn = find_free_connection(s->connections, CONNECTIONS_MAX);
 	s->active_cnt++;
 
-	CORO_SETUP_TASK(&conn->coro_ctx);
+	CORO_INIT(&conn->coro_ctx);
 	conn->addr = sockaddr_to_ipv4_addr(&conn_addr);
 	conn->sock_fd = conn_fd;
 	conn->is_open = true;
@@ -228,12 +228,12 @@ int server_listen(Server *s, ConnCallback callback, size_t data_size)
 {
 	struct epoll_event events[EVENTS_MAX] = {0};
 
-	char *callback_data = ALLOCATE_SIZED_ARRAY(data_size, CONNECTIONS_MAX);
-	if (callback_data == NULL)
+	char *coro_data = ALLOCATE_SIZED_ARRAY(data_size, CONNECTIONS_MAX);
+	if (coro_data == NULL)
 		ERRNO_FATAL("malloc");
-	// Initialize data buffers for all connection coros
+	// Initialize data for all connection coros
 	for (int i = 0; i < CONNECTIONS_MAX; ++i) {
-		s->connections[i].coro_ctx.data = callback_data + i * data_size;
+		s->connections[i].coro_ctx.data = coro_data + i * data_size;
 		s->connections[i].coro_ctx.data_size = data_size;
 	}
 
@@ -273,13 +273,13 @@ int server_listen(Server *s, ConnCallback callback, size_t data_size)
 
 void close_connection(Connection *c)
 {
-	if (!c->is_open)
-		return;
+	assert(c->is_open);
 
 	if (shutdown(c->sock_fd, SHUT_RDWR) < 0 && errno == ENOTCONN) {
 		LOG_DEBUG("Connection dropped  %s", fmt_ipv4_addr(c->addr));
 	} else
 		LOG_DEBUG("Connection closed   %s", fmt_ipv4_addr(c->addr));
+
 	close(c->sock_fd);
 	c->is_open = false;
 }

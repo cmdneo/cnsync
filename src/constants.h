@@ -57,7 +57,7 @@ static const String HTTP_METHOD_NAMES[] = {
 	[METHOD_UNKNOWN] = CSTRING("<unknown-http-request-method>"),
 };
 
-enum StatusCode {
+enum HTTPStatusCode {
 	STATUS_OK = 200,
 	STATUS_BAD_REQUEST = 400,
 	STATUS_NOT_FOUND = 404,

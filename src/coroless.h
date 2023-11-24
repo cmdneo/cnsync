@@ -7,9 +7,9 @@
 /// @brief Signalling values returned by coros, all of these are negative.
 enum CoroSignal {
 	// Unhandeled system-call error, errno should be checked if this happens.
-	// Coroutines unwind and return to the caller(at CORO_RUN_TASK), if this value
+	// Coroutines unwind and return to the caller(at CORO_RUN), if this value
 	// is detected. A coroutine should not be resumed after it returns this
-	// value without using CORO_SETUP_TASK on it, doing so is an error.
+	// value without using CORO_INIT on it, doing so is an error.
 	CORO_SYS_ERROR = -1,
 	// IO/wait operation would block.
 	CORO_PENDING = -31,
@@ -27,6 +27,7 @@ enum CoroSignal {
 typedef struct CoroContext {
 	int step;
 	int data_size;
+	// For storing additional state information by the user
 	void *data;
 } CoroContext;
 
@@ -38,15 +39,14 @@ typedef struct CoroContext {
 #define fallthrough__
 #endif
 
-#define CORO_ASSERT_DATA_SIZE(data_type) \
-	assert(sizeof(data_type) <= crs__->data_size)
+#define CORO_GET_DATA_PTR(state_ptr, defined_varname)         \
+	assert(sizeof(*defined_varname) == state_ptr->data_size); \
+	defined_varname = state_ptr->data;
 
-#define CORO_BEGIN(ptr_type_parameter) \
-	CoroContext *crs__ = state;        \
-	ptr_type_parameter = crs__->data;  \
-	switch (crs__->step) {             \
-	case 0:                            \
-		memset(crs__->data, 0, crs__->data_size);
+#define CORO_BEGIN(state_ptr)       \
+	CoroContext *crs__ = state_ptr; \
+	switch (crs__->step) {          \
+	case 0:
 
 #define CORO_END()                                    \
 	crs__->step = -1;                                 \
@@ -83,8 +83,13 @@ typedef struct CoroContext {
 		return CORO_DONE; \
 	} while (0)
 
-#define CORO_RUN_TASK(result_var, call_expr) result_var = call_expr
+#define CORO_RUN(result_var, call_expr) result_var = call_expr
 
-#define CORO_SETUP_TASK(context_ptr) (context_ptr)->step = 0
+#define CORO_INIT(context_ptr)                    \
+	do {                                          \
+		CoroContext *crs__ = context_ptr;         \
+		crs__->step = 0;                          \
+		memset(crs__->data, 0, crs__->data_size); \
+	} while (0)
 
 #endif
