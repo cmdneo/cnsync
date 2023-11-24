@@ -17,7 +17,6 @@ typedef struct BufReader {
 typedef struct BufWriter {
 	int sock_fd;
 	int len;
-	int done_len;
 	bool is_closed;
 	const char *data;
 } BufWriter;

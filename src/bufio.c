@@ -1,6 +1,5 @@
 #include <stdlib.h>
 #include <sys/socket.h>
-#include <stdint.h>
 
 #include "logger.h"
 #include "common.h"
@@ -9,23 +8,31 @@
 
 void writer_put_data(BufWriter *b, const char *data, int len)
 {
-	if (!b->data) {
-		LOG_FATAL("%s: Cannot put new data without draining.", __func__);
+	if (b->is_closed) {
+		LOG_FATAL("%s: Cannot put data in a closed stream.", __func__);
+		abort();
+	}
+	if (b->data != NULL) {
+		LOG_FATAL(
+			"%s: Cannot put in new data without draining the old data.",
+			__func__
+		);
 		abort();
 	}
 
 	b->data = data;
 	b->len = len;
-	b->done_len = 0;
 }
 
 int async_writer_drain(BufWriter *b)
 {
-	int remaining = b->len - b->done_len;
+	if (b->is_closed) {
+		LOG_FATAL("%s: Attempt to write to a closed stream.", __func__);
+		abort();
+	}
 
-	while (b->done_len < b->len) {
-		int len =
-			send(b->sock_fd, b->data + b->done_len, remaining, MSG_NOSIGNAL);
+	while (b->len > 0) {
+		int len = send(b->sock_fd, b->data, b->len, MSG_NOSIGNAL);
 		if (len < 0) {
 			if (is_blocking_error(errno))
 				return CORO_PENDING;
@@ -36,8 +43,12 @@ int async_writer_drain(BufWriter *b)
 			ERRNO_FATAL("send");
 		}
 
-		b->done_len += len;
+		b->data += len;
+		b->len -= len;
 	}
+
+	assert(b->len == 0);
+	b->data = NULL;
 
 	return CORO_DONE;
 }
