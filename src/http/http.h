@@ -7,6 +7,7 @@
 #ifndef HTTP_H_INCLUDED
 #define HTTP_H_INCLUDED
 
+#include "mystr.h"
 #include "common.h"
 
 #define HTTP_VERSION_STR "HTTP/1.0"

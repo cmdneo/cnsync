@@ -3,8 +3,9 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "config.h"
 #include "common.h"
+#include "config.h"
+#include "mystr.h"
 #include "http/http.h"
 #include "http/parser.h"
 #include "http/http.h"

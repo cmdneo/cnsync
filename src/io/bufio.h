@@ -2,6 +2,7 @@
 #define BUFIO_H_INCLUDED
 
 #include "common.h"
+#include "logger.h"
 #include "coroless.h"
 
 typedef struct BufReader {

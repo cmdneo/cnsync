@@ -3,6 +3,7 @@
 
 #include "common.h"
 #include "config.h"
+#include "logger.h"
 #include "coroless.h"
 #include "io/bufio.h"
 

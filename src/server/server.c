@@ -3,12 +3,10 @@
  * @brief Asynchronous TCP socket server for Linux.
  */
 
-#include <assert.h>
 #include <ctype.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdbool.h>
 #include <signal.h>
 #include <string.h>
 #include <time.h>
@@ -22,6 +20,8 @@
 
 #include "common.h"
 #include "config.h"
+#include "logger.h"
+#include "memory.h"
 #include "server/server.h"
 #include "io/bufio.h"
 #include "coroless.h"

@@ -5,9 +5,10 @@
 #include <locale.h>
 #include <time.h>
 
+#include "common.h"
 #include "config.h"
 #include "coroless.h"
-#include "common.h"
+#include "mystr.h"
 #include "io/bufio.h"
 #include "server/server.h"
 #include "http/request.h"
