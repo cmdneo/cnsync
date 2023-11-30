@@ -59,6 +59,9 @@ static inline bool string_append_number(StringBuilder *s, unsigned long num)
 	static char buffer[64]; // Enough even for a 128-bit number
 	int len = 0;
 
+	if (num == 0)
+		buffer[len++] = '0';
+
 	while (num) {
 		buffer[len++] = num % 10 + '0';
 		num /= 10;
