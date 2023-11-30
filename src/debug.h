@@ -4,18 +4,28 @@
 #include "request.h"
 #include "constants.h"
 #include "logger.h"
+#include "mystr.h"
 
-static void debug_request(const Request *r)
+static void debug_request(const HTTPHeader *r)
 {
-	PRINTE("Method:  %s\n", HTTP_METHOD_NAMES[r->method].data);
-	PRINTE("Version: HTTP/%d.%d\n", r->version.major, r->version.minor);
-	PRINTE("URI:     %.*s\n", r->uri.full_len, r->uri.full);
+	PRINTE("Method:  %s\n", METHOD_NAME_STRINGS[r->method].data);
+	PRINTE("Version: HTTP/1.%d\n", r->version % 1);
+	PRINTE("URI:     %.*s\n", r->uri.full.len, r->uri.full);
 
 	PRINTE("Fields:\n");
 
-	for (int i = 0; i < r->field_cnt; ++i) {
-		HeaderField f = r->fields[i];
-		PRINTE("\t%.*s: %.*s\n", f.name_len, f.name, f.value_len, f.value);
+	for (int i = 0; i < HNAME_COUNT; ++i) {
+		if (string_is_null(r->std_fields[i]))
+			continue;
+
+		String name = HEADER_NAME_STRINGS[i];
+		String value = r->std_fields[i];
+		PRINTE("\t%.*s: %.*s\n", name.len, name.data, value.len, value.data);
+	}
+
+	for (int i = 0; i < r->extra_field_cnt; ++i) {
+		HeaderField f = r->extra_fields[i];
+		PRINTE("\t%.*s: %.*s\n", f.name.len, f.name, f.value.len, f.value);
 	}
 }
 

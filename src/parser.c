@@ -6,6 +6,7 @@
 #include "request.h"
 #include "common.h"
 #include "parser.h"
+#include "http.h"
 
 enum TokenType {
 	TOK_NAME,
@@ -46,12 +47,6 @@ typedef struct Scanner {
 		if (tok_type != token.ttype)  \
 			return false;             \
 	} while (0)
-
-/// Compare the strings, case-insesetive.
-static inline bool eq_case_string(String s1, String s2)
-{
-	return s1.len == s2.len && !strncasecmp(s1.data, s2.data, s1.len);
-}
 
 // Functions for different character classes we want
 static inline int is_name_char(int c)
@@ -110,6 +105,11 @@ static inline Token skip_while_impl(Scanner *s, int (*predicate)(int))
 	return make_token(TOK_CUSTOM, s);
 }
 
+static inline void scanner_skip_blanks(Scanner *s)
+{
+	skip_while_impl(s, isblank);
+}
+
 /// @brief Returns a token spanning from current position to position
 ///        upto which predicate is satisfied by the characters.
 /// @param s Scanner
@@ -164,15 +164,15 @@ static Token scanner_next_token(Scanner *s)
 /// @brief Parse request line: <method <uri> 'HTTP'/<digit>'.'<digit> CRLF
 /// @param r
 /// @return true on success
-static bool parse_request_line(Scanner *s, Request *r)
+static bool parse_request_line(Scanner *s, HTTPHeader *r)
 {
 	// Parse method type.
 	r->method = METHOD_UNKNOWN;
 	SCANNER_CONSUME(s, TOK_NAME);
 
 	for (int i = 0; i < METHOD_UNKNOWN; ++i) {
-		String name = HTTP_METHOD_NAMES[i];
-		if (eq_case_string(name, name)) {
+		String name = METHOD_NAME_STRINGS[i];
+		if (string_eq_case(name, name)) {
 			r->method = i;
 			break;
 		}
@@ -186,15 +186,12 @@ static bool parse_request_line(Scanner *s, Request *r)
 
 	// Parse HTTP version
 	Token ver = scanner_skip_while(s, is_not_crlf);
-	if (eq_case_string(ver.lexeme, CSTRING("HTTP/1.0"))) {
-		r->version.major = 1;
-		r->version.minor = 0;
-	} else if (eq_case_string(ver.lexeme, CSTRING("HTTP/1.1"))) {
-		r->version.major = 1;
-		r->version.minor = 1;
-	} else {
+	if (string_eq_case(ver.lexeme, CSTRING("HTTP/1.0")))
+		r->version = 10;
+	else if (string_eq_case(ver.lexeme, CSTRING("HTTP/1.1")))
+		r->version = 11;
+	else
 		return false;
-	}
 
 	SCANNER_CONSUME(s, TOK_CRLF);
 	return true;
@@ -203,38 +200,62 @@ static bool parse_request_line(Scanner *s, Request *r)
 /// @brief Parse request fields: (<name> ':' <value> CRLF)* CRLF
 /// @param r
 /// @return true on success
-static bool parse_request_fields(Scanner *s, Request *r)
+static bool parse_request_fields(Scanner *s, HTTPHeader *r)
 {
 	while (1) {
 		Token name = scanner_next_token(s);
 		// CRLF CRLF marks the end of header
 		if (name.ttype == TOK_CRLF)
 			return true;
-		// Too many fields
-		if (r->field_cnt == FIELDS_MAX)
-			return false;
-
-		HeaderField *f = &r->fields[r->field_cnt++];
 
 		// A field is like: name ':' blanks? value CRLF
 		TOKEN_EXPECT(name, TOK_NAME);
-		f->name = s->current.lexeme;
+		String header_name = s->current.lexeme;
 
 		SCANNER_CONSUME(s, TOK_COLON);
-		if (isblank(scanner_peekc(s)))
-			SCANNER_CONSUME(s, TOK_BLANKS);
+		scanner_skip_blanks(s);
 
 		scanner_skip_while(s, is_not_crlf);
-		f->value = s->current.lexeme;
+		String value = s->current.lexeme;
 
 		SCANNER_CONSUME(s, TOK_CRLF);
+
+		// Check if it is a standard header name we know.
+		int std_header = -1;
+		for (int i = 0; i < HNAME_COUNT; ++i) {
+			if (!string_eq_case(header_name, HEADER_NAME_STRINGS[i]))
+				continue;
+
+			// We do not allow repeating any std header names.
+			if (!string_is_null(r->std_fields[i]))
+				return false;
+			std_header = i;
+			break;
+		}
+
+		if (std_header != -1) {
+			r->std_fields[std_header] = value;
+		} else {
+			if (r->extra_field_cnt == EXTRA_FIELDS_MAX)
+				return false;
+
+			HeaderField field = {.name = header_name, .value = value};
+			r->extra_fields[r->extra_field_cnt++] = field;
+		}
+
+		return true;
 	}
 }
 
-// static bool parse_request_data(Scanner *s, Request *r) {}
+// static bool parse_request_data(Scanner *s, HTTPRequest *r) {}
 
-bool parse_request(Request *r)
+bool parse_request(HTTPHeader *r)
 {
+	// Make all field values null strings, because that's how we check if a
+	// specific header-field has been seen or not for headers we track.
+	memset(r->std_fields, 0, sizeof(r->std_fields));
+	r->extra_field_cnt = 0;
+
 	Scanner s;
 	scanner_init(&s, r->header_data, r->header_len);
 

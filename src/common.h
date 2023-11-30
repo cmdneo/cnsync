@@ -5,6 +5,7 @@
 #include <stdbool.h>
 #include <errno.h>
 
+#include "mystr.h"
 #include "constants.h"
 #include "logger.h"
 
