@@ -21,9 +21,9 @@
 #include <sys/socket.h>
 
 #include "common.h"
-#include "server.h"
-#include "memory.h"
-#include "bufio.h"
+#include "config.h"
+#include "server/server.h"
+#include "io/bufio.h"
 #include "coroless.h"
 
 /// @brief The TCP Server along with HTTP-request state

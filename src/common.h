@@ -6,8 +6,8 @@
 #include <errno.h>
 
 #include "mystr.h"
-#include "constants.h"
 #include "logger.h"
+#include "memory.h"
 
 static inline bool is_blocking_error(int e)
 {

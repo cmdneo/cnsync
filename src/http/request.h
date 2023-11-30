@@ -2,7 +2,7 @@
 #define REQUEST_H_INCLUDED
 
 #include "common.h"
-#include "http.h"
+#include "http/http.h"
 
 /// @brief Checks if header has CRLF CRLF at end. Even an LF is treated as a CRLF.
 /// @param r HTTPHeader object

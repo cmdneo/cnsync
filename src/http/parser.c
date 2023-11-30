@@ -3,10 +3,11 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "request.h"
+#include "config.h"
 #include "common.h"
-#include "parser.h"
-#include "http.h"
+#include "http/http.h"
+#include "http/parser.h"
+#include "http/http.h"
 
 enum TokenType {
 	TOK_NAME,

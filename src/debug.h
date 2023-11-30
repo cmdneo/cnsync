@@ -1,10 +1,8 @@
 #ifndef DEBUG_H_DEFINED
 #define DEBUG_H_DEFINED
 
-#include "request.h"
-#include "constants.h"
-#include "logger.h"
-#include "mystr.h"
+#include "http/http.h"
+#include "common.h"
 
 static void debug_request(const HTTPHeader *r)
 {

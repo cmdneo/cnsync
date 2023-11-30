@@ -4,9 +4,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "bufio.h"
-#include "request.h"
 #include "coroless.h"
+#include "io/bufio.h"
 
 // Address as: a.b.c.d:port
 typedef struct IPv4Address {

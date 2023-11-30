@@ -5,11 +5,13 @@
 #include <locale.h>
 #include <time.h>
 
+#include "config.h"
 #include "coroless.h"
-#include "server.h"
-#include "request.h"
-#include "parser.h"
-#include "bufio.h"
+#include "common.h"
+#include "io/bufio.h"
+#include "server/server.h"
+#include "http/request.h"
+#include "http/parser.h"
 
 static char message[1 << 16]; // 64 KiB payload: aaaaaaaaaaa...!
 static const String html_mimetype = CSTRING("text/html; charset=utf-8");

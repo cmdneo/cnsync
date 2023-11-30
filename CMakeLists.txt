@@ -16,4 +16,6 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 
 include_directories("${CMAKE_SOURCE_DIR}/include")
-add_executable(main "src/server.c" "src/bufio.c" "src/parser.c" "src/coroutine.c" "src/http.c")
+include_directories("${CMAKE_SOURCE_DIR}/src")
+
+add_executable(main "src/server/server.c" "src/io/bufio.c" "src/http/parser.c" "src/http/http.c")

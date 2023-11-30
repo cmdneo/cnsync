@@ -1,10 +1,10 @@
 #include <stdlib.h>
 #include <sys/socket.h>
 
-#include "logger.h"
 #include "common.h"
-#include "bufio.h"
+#include "config.h"
 #include "coroless.h"
+#include "io/bufio.h"
 
 void writer_put_data(BufWriter *b, const char *data, int len)
 {
