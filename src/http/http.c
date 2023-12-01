@@ -25,6 +25,8 @@ const char *get_local_datetime(void)
 	return buffer;
 }
 
+/// @brief Get datetime in HTTP-datetime format
+/// @return Returns a statically allocated string.
 static String get_http_datetime(void)
 {
 	static char buffer[256];
@@ -47,51 +49,42 @@ add_std_header(HTTPHeader *resp, enum HTTPHeaderName hname, String val)
 }
 
 // Append to string builder sb: an unsigned number or String
-#define APP(num_or_str)                                                          \
+#define ADD(num_or_str)                                                          \
 	_Generic(num_or_str, String: string_append, unsigned: string_append_number)( \
 		&sb, num_or_str                                                          \
 	)
+
+#define APPEND_FIELD(name, value_num_str) \
+	(ADD(name), ADD(CSTRING(": ")), ADD(value_num_str), ADD(CSTRING("\r\n")))
 
 static bool fill_response_header_data(HTTPHeader *resp, unsigned content_length)
 {
 	StringBuilder sb = {.data = resp->header_data, .cap = HEADER_SIZE_MAX};
 
 	// Response status line
-	APP(CSTRING(HTTP_VERSION_STR " "));
-	APP(resp->status);
-	APP(CSTRING(" "));
-	APP(STATUS_CODE_STRINGS[resp->status]);
-	APP(CSTRING("\r\n"));
+	ADD(CSTRING(HTTP_VERSION_STR " "));
+	ADD(resp->status);
+	ADD(CSTRING(" "));
+	ADD(STATUS_CODE_STRINGS[resp->status]);
+	ADD(CSTRING("\r\n"));
 
 	// Headers
 	for (int i = 0; i < HNAME_COUNT; ++i) {
-		if (string_is_null(resp->std_fields[i]))
-			continue;
-
-		APP(HEADER_NAME_STRINGS[i]);
-		APP(CSTRING(": "));
-		APP(resp->std_fields[i]);
-		APP(CSTRING("\r\n"));
+		if (!string_is_null(resp->std_fields[i]))
+			APPEND_FIELD(HEADER_NAME_STRINGS[i], resp->std_fields[i]);
 	}
 
 	for (int i = 0; i < resp->extra_field_cnt; ++i) {
 		HeaderField f = resp->extra_fields[i];
-		APP(f.name);
-		APP(CSTRING(": "));
-		APP(f.value);
-		APP(CSTRING("\r\n"));
+		APPEND_FIELD(f.name, f.value);
 	}
 
-	// Fill content length only if it was not filled.
-	if (string_is_null(resp->std_fields[HNAME_CONTENT_LENGTH])) {
-		APP(HEADER_NAME_STRINGS[HNAME_CONTENT_LENGTH]);
-		APP(CSTRING(": "));
-		APP(content_length);
-		APP(CSTRING("\r\n"));
-	}
+	// Add content-length only if it has not been added
+	if (string_is_null(resp->std_fields[HNAME_CONTENT_LENGTH]))
+		APPEND_FIELD(HEADER_NAME_STRINGS[HNAME_CONTENT_LENGTH], content_length);
 
 	// End CRLF
-	if (APP(CSTRING("\r\n"))) {
+	if (!ADD(CSTRING("\r\n"))) {
 		LOG_ERROR("HTTP-response header too long.");
 		return false;
 	}
@@ -100,7 +93,8 @@ static bool fill_response_header_data(HTTPHeader *resp, unsigned content_length)
 	return true;
 }
 
-#undef APP
+#undef APPEND_FIELD
+#undef ADD
 
 typedef struct HTTPCoroState {
 	BufReader reader;
