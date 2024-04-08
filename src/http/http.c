@@ -51,7 +51,7 @@ add_std_header(HTTPHeader *resp, enum HTTPHeaderName hname, String val)
 // Append to string builder sb: an unsigned number or String
 #define ADD(num_or_str)                                                          \
 	_Generic(num_or_str, String: string_append, unsigned: string_append_number)( \
-		&sb, num_or_str                                                          \
+		&strbuf, num_or_str                                                      \
 	)
 
 #define APPEND_FIELD(name, value_num_str) \
@@ -59,7 +59,7 @@ add_std_header(HTTPHeader *resp, enum HTTPHeaderName hname, String val)
 
 static bool fill_response_header_data(HTTPHeader *resp, unsigned content_length)
 {
-	StringBuilder sb = {.data = resp->header_data, .cap = HEADER_SIZE_MAX};
+	StringBuilder strbuf = STRING_BUILDER(resp->raw.data, HEADER_SIZE_MAX);
 
 	// Response status line
 	ADD(CSTRING(HTTP_VERSION_STR " "));
@@ -89,7 +89,7 @@ static bool fill_response_header_data(HTTPHeader *resp, unsigned content_length)
 		return false;
 	}
 
-	resp->header_len = sb.len;
+	resp->raw.len = strbuf.len;
 	return true;
 }
 
@@ -123,17 +123,17 @@ int handle_http_request(CoroContext *state, Connection *conn)
 		if (c == CORO_IO_EOF)
 			break;
 
-		if (CV req.header_len == HEADER_SIZE_MAX) {
+		if (CV req.raw.len == HEADER_SIZE_MAX) {
 			CV status = STATUS_HEADER_TOO_LARGE;
 			break;
 		}
-		CV req.header_data[CV req.header_len++] = c;
+		CV req.raw.data[CV req.raw.len++] = c;
 
 		if (c == '\n' && is_request_header_end(&CV req))
 			break;
 	}
 
-	if (CV req.header_len == 0)
+	if (CV req.raw.len == 0)
 		goto conn_closed;
 
 	if (parse_request(&CV req))
@@ -153,7 +153,7 @@ int handle_http_request(CoroContext *state, Connection *conn)
 	if (!fill_response_header_data(&CV resp, sizeof(message)))
 		goto conn_closed;
 
-	writer_put_data(&CV writer, CV resp.header_data, CV resp.header_len);
+	writer_put_data(&CV writer, CV resp.raw.data, CV resp.raw.len);
 	CORO_AWAIT(len, async_writer_drain(&CV writer));
 	if (CV writer.is_closed)
 		goto conn_closed;

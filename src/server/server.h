@@ -32,7 +32,7 @@ typedef struct Connection {
 	// Since, it holds the allocated data buffer.
 	CoroContext coro_ctx;
 	// Internal: Connection freelist, -1 means end of freelist.
-	// TODO implement this thing.
+	// TODO implement this free list thing.
 	int next_free;
 } Connection;
 

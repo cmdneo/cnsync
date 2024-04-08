@@ -36,7 +36,7 @@ typedef struct CoroContext {
 #if (defined __GNUC__) || (defined __clang__)
 #define coro_fallthrough__ __attribute__((__fallthrough__))
 #else
-#define fallthrough__
+#define coro_fallthrough__
 #endif
 
 #define CORO_GET_DATA_PTR(state_ptr, defined_varname)         \

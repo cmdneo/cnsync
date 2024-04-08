@@ -14,7 +14,7 @@ enum ServerConfig {
 enum HTTPConfig {
 	// Max size of request and response headers.
 	HEADER_SIZE_MAX = 8190,
-	URI_MAX = 2048,
+	URI_SIZE_MAX = 4096,
 	// Max number of header-fields besides those we keep track for.
 	EXTRA_FIELDS_MAX = 64,
 };

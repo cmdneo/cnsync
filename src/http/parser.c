@@ -8,7 +8,6 @@
 #include "mystr.h"
 #include "http/http.h"
 #include "http/parser.h"
-#include "http/http.h"
 
 enum TokenType {
 	TOK_NAME,
@@ -97,14 +96,13 @@ static inline int scanner_peekc(const Scanner *s)
 	return *s->at;
 }
 
-static inline Token skip_while_impl(Scanner *s, int (*predicate)(int))
+static inline void skip_while_impl(Scanner *s, int (*predicate)(int))
 {
 	int c = 0;
 	while ((c = scanner_getc(s)) != EOF && predicate(c))
 		/* nothing */;
 
 	scanner_ungetc(s); // Unconsume the unmatched char
-	return make_token(TOK_CUSTOM, s);
 }
 
 static inline void scanner_skip_blanks(Scanner *s)
@@ -112,15 +110,17 @@ static inline void scanner_skip_blanks(Scanner *s)
 	skip_while_impl(s, isblank);
 }
 
-/// @brief Returns a token spanning from current position to position
-///        upto which predicate is satisfied by the characters.
+/// @brief Returns a token spanning from the current position upto
+///        where `predicate` is satisfied by the characters.
 /// @param s Scanner
 /// @param predicate Unary predicate
 /// @return Token
 static inline Token scanner_skip_while(Scanner *s, int (*predicate)(int))
 {
 	s->start = s->at;
-	s->current = skip_while_impl(s, predicate);
+	skip_while_impl(s, predicate);
+
+	s->current = make_token(TOK_CUSTOM, s);
 	return s->current;
 }
 
@@ -137,18 +137,16 @@ static Token next_token_impl(Scanner *s)
 		return make_token(TOK_CRLF, s);
 
 	if (c == '\r' && scanner_peekc(s) == '\n') {
-		scanner_getc(s);
+		scanner_getc(s); // consume '\n'
 		return make_token(TOK_CRLF, s);
 	}
 	if (isblank(c)) {
-		Token tok = skip_while_impl(s, isblank);
-		tok.ttype = TOK_BLANKS;
-		return tok;
+		skip_while_impl(s, isblank);
+		return make_token(TOK_BLANKS, s);
 	}
 	if (is_name_char(c)) {
-		Token tok = skip_while_impl(s, is_name_char);
-		tok.ttype = TOK_NAME;
-		return tok;
+		skip_while_impl(s, is_name_char);
+		return make_token(TOK_NAME, s);
 	}
 
 	return make_token(TOK_ERROR, s);
@@ -161,6 +159,75 @@ static Token scanner_next_token(Scanner *s)
 {
 	s->current = next_token_impl(s);
 	return s->current;
+}
+
+/// @brief Convert hex character to its integer value.
+/// @param c Hex character.
+/// @return Integer value or -1 if invalid hex char.
+static inline int hex_to_num(int c)
+{
+	c = toupper(c);
+	if ('0' <= c && c <= '9')
+		return c - '0';
+	else if ('A' <= c && c <= 'F')
+		return c - 'A' + 10;
+
+	return -1;
+}
+
+/// @brief Decodes the percent encoding.
+/// @param s Encoded string.
+/// @param res Decoded string is appended to it.
+/// @return true if successful.
+static bool decode_percent_encoding(String s, StringBuilder *res)
+{
+	for (int i = 0; i < s.len;) {
+		if (s.data[i] != '%') {
+			res->data[res->len++] = s.data[i++];
+			continue;
+		}
+		i++; // Skip %
+
+		// Two valid hex characters must be present after the percent.
+		if (s.len - i < 2)
+			return false;
+
+		int c1 = hex_to_num(s.data[i]);
+		int c2 = hex_to_num(s.data[i + 1]);
+		if (c1 < 0 || c2 < 0)
+			return false;
+
+		res->data[res->len++] = 16 * c1 + c2;
+		i += 2;
+	}
+
+	return true;
+}
+
+/// @brief Parse URI by decoding(the % encoding) and splitting it into parts.
+/// @param s Scanner
+/// @param r Request header with `r->uri.full` field filled.
+/// @return true if successful.
+static bool parse_uri_string(HTTPHeader *r, String uri)
+{
+	if (uri.len > URI_SIZE_MAX)
+		return false;
+
+	String path = uri, query = {0}, segment = {0};
+
+	int query_at = string_findc(uri, '?');
+	if (query_at >= 0)
+		string_partition(path, query_at, &path, &query);
+
+	int seg_at = string_findc(query, '#');
+	if (seg_at >= 0)
+		string_partition(path, seg_at, &path, &segment);
+
+	r->uri.raw.len = uri.len;
+	memcpy(r->uri.raw.data, uri.data, uri.len);
+
+	// TODO Decode percent encoding.
+	return true;
 }
 
 /// @brief Parse request line: <method <uri> 'HTTP'/<digit>'.'<digit> CRLF
@@ -183,8 +250,9 @@ static bool parse_request_line(Scanner *s, HTTPHeader *r)
 
 	// Parse URI
 	Token uri = scanner_skip_while(s, is_uri_char);
-	r->uri = (RequestURI){.full = uri.lexeme};
 	SCANNER_CONSUME(s, TOK_BLANKS);
+	if (!parse_uri_string(r, uri.lexeme))
+		return false;
 
 	// Parse HTTP version
 	Token ver = scanner_skip_while(s, is_not_crlf);
@@ -259,14 +327,14 @@ bool parse_request(HTTPHeader *r)
 	r->extra_field_cnt = 0;
 
 	Scanner s;
-	scanner_init(&s, r->header_data, r->header_len);
+	scanner_init(&s, r->raw.data, r->raw.len);
 
 	// Grab the first line first.
-	for (int i = 0; i < r->header_len; ++i) {
-		char c = r->header_data[i];
+	for (int i = 0; i < r->raw.len; ++i) {
+		char c = r->raw.data[i];
 		if (c != '\n' && c != '\r')
 			continue;
-		r->first_line = STRING(r->header_data, i);
+		r->first_line = STRING(r->raw.data, i);
 		break;
 	}
 

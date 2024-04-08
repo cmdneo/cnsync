@@ -9,8 +9,8 @@
 /// @return boolean
 static inline bool is_request_header_end(HTTPHeader *r)
 {
-	int len = r->header_len >= 4 ? 4 : r->header_len;
-	const char *end = r->header_data + r->header_len;
+	int len = r->raw.len >= 4 ? 4 : r->raw.len;
+	const char *end = r->raw.data + r->raw.len;
 	const char *start = end - len;
 	int prev = 0;
 

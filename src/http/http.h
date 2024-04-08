@@ -157,6 +157,7 @@ typedef struct RequestURI {
 	String path;
 	String query;
 	String segment;
+	DEF_STRING_BUFFER(raw, URI_SIZE_MAX);
 } RequestURI;
 
 /// @brief HTTP header data, can be used for both request and response.
@@ -178,8 +179,7 @@ typedef struct HTTPHeader {
 
 	// Points to the first line of header data, used only for requests.
 	String first_line;
-	char header_data[HEADER_SIZE_MAX];
-	int header_len;
+	DEF_STRING_BUFFER(raw, HEADER_SIZE_MAX);
 } HTTPHeader;
 
 #endif

@@ -22,9 +22,9 @@
 #include "config.h"
 #include "logger.h"
 #include "memory.h"
+#include "coroless.h"
 #include "server/server.h"
 #include "io/bufio.h"
-#include "coroless.h"
 
 /// @brief The TCP Server along with HTTP-request state
 typedef struct Server {
@@ -159,13 +159,12 @@ int handle_conn_event(
 	}
 
 	// If sender hangs up
-	if (events & EPOLLRDHUP && conn->is_open) {
+	if (events & EPOLLRDHUP && conn->is_open)
 		close_connection(conn);
-	}
 
 	// Closed FDs are auto removed from epoll interest list.
 	if (!conn->is_open) {
-		// A connection is always from server's list of connections.
+		// A connection pointer always refers to server's list of connections.
 		conn->is_open = false;
 		s->active_cnt--;
 	}
@@ -275,9 +274,9 @@ void close_connection(Connection *c)
 {
 	assert(c->is_open);
 
-	if (shutdown(c->sock_fd, SHUT_RDWR) < 0 && errno == ENOTCONN) {
+	if (shutdown(c->sock_fd, SHUT_RDWR) < 0 && errno == ENOTCONN)
 		LOG_DEBUG("Connection dropped  %s", fmt_ipv4_addr(c->addr));
-	} else
+	else
 		LOG_DEBUG("Connection closed   %s", fmt_ipv4_addr(c->addr));
 
 	close(c->sock_fd);
